@@ -135,16 +135,23 @@ if rawget(_G, "__DEBUG__") == nil then _G.__DEBUG__ = false end
 if rawget(_G, "__YOLO__") == nil then _G.__YOLO__ = false end
 
 __register("SafeFlags", function()
-        local function makeFlag()
-                return function() return false end
-        end
-        local function makeInt()
-                return function() return 0 end
-        end
+        -- Stub: feature flags off, but RESPECT the caller-provided default for
+        -- ints/strings. React's Scheduler passes meaningful defaults (e.g.
+        -- yieldInterval=15ms, frameRate=60). Returning 0 makes the scheduler
+        -- yield after every work unit (one ~16ms frame each) which causes
+        -- multi-second lag for any non-trivial render.
         return {
-                createGetFFlag = function(_) return makeFlag() end,
-                createGetFInt = function(_) return makeInt() end,
-                createGetFString = function(_) return function() return "" end end,
+                createGetFFlag = function(_name)
+                        return function() return false end
+                end,
+                createGetFInt = function(_name, default)
+                        local d = tonumber(default) or 0
+                        return function() return d end
+                end,
+                createGetFString = function(_name, default)
+                        local d = tostring(default or "")
+                        return function() return d end
+                end,
         }
 end)
 
@@ -11713,7 +11720,7 @@ local function forceFrameRate(fps)
 			"forceFrameRate takes a positive int between 0 and 125, "
 				.. "forcing frame rates higher than 125 fps is not supported"
 		)
-		return
+ 		return
 	end
 	if fps > 0 then
 		yieldInterval = math.floor(1000 / fps)
@@ -51475,15 +51482,30 @@ return warnOnce
 end
 end)())
 
-return {
-    React = __require("React"),
-    ReactRoblox = __require("ReactRoblox"),
-    ReactIs = __require("ReactIs"),
-    RoactCompat = __require("RoactCompat"),
-    Scheduler = __require("Scheduler"),
-    Shared = __require("Shared"),
-    LuauPolyfill = __require("LuauPolyfill"),
-    Promise = __require("Promise"),
-    Symbol = __require("Symbol"),
-    ReactGlobals = __require("ReactGlobals"),
+-- Lazy public API: each field is loaded on first access via __index, so users
+-- who only use Roreact.React don't pay init cost for ReactRoblox/Promise/etc.
+local __publicMap = {
+    React = "React",
+    ReactRoblox = "ReactRoblox",
+    ReactIs = "ReactIs",
+    RoactCompat = "RoactCompat",
+    Scheduler = "Scheduler",
+    Shared = "Shared",
+    LuauPolyfill = "LuauPolyfill",
+    Promise = "Promise",
+    Symbol = "Symbol",
+    ReactGlobals = "ReactGlobals",
 }
+local __publicCache = {}
+return setmetatable({}, {
+    __index = function(_, k)
+        local v = __publicCache[k]
+        if v ~= nil then return v end
+        local id = __publicMap[k]
+        if not id then return nil end
+        v = __require(id)
+        __publicCache[k] = v
+        return v
+    end,
+    __iter = function() return next, __publicMap end,
+})
