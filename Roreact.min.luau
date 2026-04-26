@@ -31478,6 +31478,81 @@ end
 return warnOnce
 end
 end)())
+__M["Scheduler/forks/SchedulerHostConfig.default"] = function()
+local getCurrentTime = function() return os.clock() * 1000 end
+local scheduledHostCallback = nil
+local isMessageLoopRunning = false
+local yieldInterval = 15
+local deadline = 0
+local function shouldYieldToHost()
+return getCurrentTime() >= deadline
+end
+local function requestPaint() end
+local performWorkUntilDeadline
+performWorkUntilDeadline = function()
+if scheduledHostCallback ~= nil then
+local currentTime = getCurrentTime()
+deadline = currentTime + yieldInterval
+local cb = scheduledHostCallback
+local ok, hasMore = pcall(cb, true, currentTime)
+if not ok then
+isMessageLoopRunning = false
+scheduledHostCallback = nil
+error(hasMore)
+end
+if not hasMore then
+isMessageLoopRunning = false
+scheduledHostCallback = nil
+else
+task.spawn(performWorkUntilDeadline)
+end
+else
+isMessageLoopRunning = false
+end
+end
+local function requestHostCallback(callback)
+scheduledHostCallback = callback
+if not isMessageLoopRunning then
+isMessageLoopRunning = true
+task.spawn(performWorkUntilDeadline)
+end
+end
+local function cancelHostCallback()
+scheduledHostCallback = nil
+end
+local timeouts = {}
+local function requestHostTimeout(callback, ms)
+local id = {}
+timeouts[id] = true
+task.delay((tonumber(ms) or 0) / 1000, function()
+if timeouts[id] then
+timeouts[id] = nil
+callback(getCurrentTime())
+end
+end)
+return id
+end
+local function cancelHostTimeout(id)
+if id ~= nil then timeouts[id] = nil end
+end
+local function forceFrameRate(fps)
+if fps and fps > 0 then yieldInterval = math.floor(1000 / fps) end
+end
+local function setSchedulerFlags() end
+local function getSchedulerFlags() return {} end
+return {
+requestHostCallback = requestHostCallback,
+cancelHostCallback = cancelHostCallback,
+requestHostTimeout = requestHostTimeout,
+cancelHostTimeout = cancelHostTimeout,
+shouldYieldToHost = shouldYieldToHost,
+requestPaint = requestPaint,
+getCurrentTime = getCurrentTime,
+forceFrameRate = forceFrameRate,
+setSchedulerFlags = setSchedulerFlags,
+getSchedulerFlags = getSchedulerFlags,
+}
+end
 local __publicMap = {
 React = "React",
 ReactRoblox = "ReactRoblox",
