@@ -106,16 +106,18 @@ if rawget(_G, "__EXPERIMENTAL__") == nil then _G.__EXPERIMENTAL__ = false end
 if rawget(_G, "__DEBUG__") == nil then _G.__DEBUG__ = false end
 if rawget(_G, "__YOLO__") == nil then _G.__YOLO__ = false end
 __register("SafeFlags", function()
-local function makeFlag()
-return function() return false end
-end
-local function makeInt()
-return function() return 0 end
-end
 return {
-createGetFFlag = function(_) return makeFlag() end,
-createGetFInt = function(_) return makeInt() end,
-createGetFString = function(_) return function() return "" end end,
+createGetFFlag = function(_name)
+return function() return false end
+end,
+createGetFInt = function(_name, default)
+local d = tonumber(default) or 0
+return function() return d end
+end,
+createGetFString = function(_name, default)
+local d = tostring(default or "")
+return function() return d end
+end,
 }
 end)
 __register("ES7Types/init", (function()
